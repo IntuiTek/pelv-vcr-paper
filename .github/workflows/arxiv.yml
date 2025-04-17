@@ -1,0 +1,114 @@
+name: arXiv Submission
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Trigger on version tags like v1.0.0
+
+jobs:
+  build-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TeX Live
+        run: |
+          sudo apt-get update -qq 
+          sudo apt-get install -y --no-install-recommends texlive-full ghostscript
+      
+      - name: Compile PDF
+        run: latexmk -pdf -output-directory=./draft draft/main.tex
+
+      # Note: The compliance check needs the PDF in the root for pdffonts/gs
+      # Copy the PDF temporarily to the root
+      - name: Copy PDF for Compliance Check
+        run: cp draft/main.pdf .
+
+      - name: PDF Font Check
+        run: |
+          pdffonts main.pdf | awk 'NR>2 && ($2!="yes" || $3!="yes"){print "ERROR: Font embed or subset missing"; exit 1}'
+      
+      - name: Generate PDF/A
+        run: |
+          gs -dPDFA=1 -dBATCH -dNOPAUSE -dNOOUTERSAVE -sProcessColorModel=DeviceRGB \
+             -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 \
+             -dPDFACompatibilityPolicy=1 \
+             -sOutputFile=main_pdfa.pdf main.pdf
+          mv main_pdfa.pdf draft/main.pdf # Move compliant PDF back to draft
+          rm main.pdf # Clean up temporary PDF
+
+      - name: Generate JSON Metadata
+        run: python3 scripts/metadata_from_yaml.py metadata.yaml metadata.json # Output JSON to root for packaging
+
+      - name: Upload Artifacts (PDF and JSON)
+        uses: actions/upload-artifact@v3
+        with:
+          name: arxiv-submission-files
+          path: |
+            draft/main.pdf
+            metadata.json
+
+  submit:
+    needs: build-validate
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3 # Need to checkout again for source files
+      
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: arxiv-submission-files
+          path: .
+          
+      - name: Create Submission Package
+        run: |
+          mkdir submission_package
+          cp draft/main.tex submission_package/
+          cp references.bib submission_package/ # Assuming references.bib is in root
+          # Copy any image files if needed: cp draft/*.png submission_package/
+          # Add other source files if necessary
+          tar czf submission.tar.gz -C submission_package . # Package .tex, .bib (and images)
+
+      - name: SFTP to arXiv
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: upload.arxiv.org
+          username: ${{ secrets.ARXIV_USER }} # Needs to be configured in GitHub Secrets
+          password: ${{ secrets.ARXIV_TOKEN }} # Needs to be configured in GitHub Secrets
+          port: 22
+          source: "submission.tar.gz,main.pdf,metadata.json" # Send tarball, final PDF, metadata
+          target: /incoming/
+          strip_components: 0 # Keep the filenames as they are
+
+      - name: Notify Slack
+        if: always() # Notify even if previous steps fail
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload: |
+            {
+              "text": "arXiv submission status for ${{ github.ref }}: ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "arXiv submission status for *${{ github.ref }}*: `${{ job.status }}`"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow Run"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} # Needs to be configured in GitHub Secrets 
