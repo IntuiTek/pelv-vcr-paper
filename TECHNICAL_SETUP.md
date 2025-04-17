@@ -6,7 +6,7 @@
 
 ## 1. Project Structure
 
-A dedicated `paper/` directory was created in the workspace (`C:\Users\wkmil\.cursor\SharedInformation\Projects\ProjectReports\V-JEPA2Solution`) containing the following key components:
+A dedicated `paper/` directory was created in the workspace (e.g., `[Local Workspace Path]`) containing the following key components:
 
 -   **`draft/main.tex`:** The main LaTeX source file for the paper. Initially populated with preamble, abstract, and section stubs based on `arXivPreprint.txt`. Requires content filling.
 -   **`references.bib`:** BibTeX file for managing citations. Initially empty, requires population.
@@ -35,21 +35,21 @@ A dedicated `paper/` directory was created in the workspace (`C:\Users\wkmil\.cu
 
 A significant challenge involved authenticating Git operations (specifically `git push`) from the local environment to the `IntuiTek/pelv-vcr-paper` repository.
 
--   **Initial Problem:** Push attempts failed with a `403 Forbidden` error, indicating permission denial. The error message explicitly mentioned `thebrierfox`, which was identified as an incorrect GitHub identity without access to the `IntuiTek` organization repositories.
+-   **Initial Problem:** Push attempts failed with a `403 Forbidden` error, indicating permission denial. The error message explicitly mentioned an incorrect GitHub identity (`[Incorrect GitHub User]`) without access to the `IntuiTek` organization repositories.
 -   **Diagnosis:**
-    1.  Checked local Git config (`git config user.name`/`email`): Showed `AEGIS`/`aegis@anthropic.local`, relevant for commit authorship but not push authentication via SSH.
-    2.  Tested SSH connection (`ssh -T git@github.com`): This **successfully** authenticated as `KyleMillion` (the identity associated with the `kyle@intuitek.ai` email used for the key), confirming the SSH key itself and its association with the correct GitHub account were working.
+    1.  Checked local Git config (`git config user.name`/`email`): Showed an unrelated local configuration (`[Local Git User]`/`[Local Git Email]`), relevant for commit authorship but not push authentication via SSH.
+    2.  Tested SSH connection (`ssh -T git@github.com`): This **successfully** authenticated using the correct GitHub account identity (`[Correct GitHub User]`, associated with the `[User Email]` used for the key), confirming the SSH key itself and its association with the correct GitHub account were working.
     3.  Checked Git remote configuration (`git remote -v`): Revealed the `origin` remote was using an `https://...` URL.
--   **Root Cause:** Using HTTPS for the remote URL caused Git to rely on the Windows Credential Manager, which had cached credentials for the `thebrierfox` user for `github.com`. SSH keys were being ignored.
+-   **Root Cause:** Using HTTPS for the remote URL caused Git to rely on the Windows Credential Manager, which had cached credentials for the incorrect user (`[Incorrect GitHub User]`) for `github.com`. SSH keys were being ignored.
 -   **Solution - Switch to SSH:**
-    1.  **Generate SSH Key:** An ED25519 SSH key pair was generated specifically for this purpose (`~/.ssh/id_ed25519_intuitek` and `.pub`) associated with the email `kyle@intuitek.ai`.
-    2.  **Add Key to GitHub:** The public key (`id_ed25519_intuitek.pub`) was added to the SSH keys in the GitHub settings for the `KyleMillion` account (which has access to `IntuiTek`).
-    3.  **Configure SSH Client:** An SSH config file (`~/.ssh/config`) was created/updated to explicitly tell the SSH client to use the `id_ed25519_intuitek` key when connecting to `github.com`:
+    1.  **Generate SSH Key:** An ED25519 SSH key pair was generated specifically for this purpose (`~/.ssh/[ssh_key_filename]` and `.pub`) associated with the intended user email (`[User Email]`).
+    2.  **Add Key to GitHub:** The public key (`[ssh_key_filename].pub`) was added to the SSH keys in the GitHub settings for the correct GitHub account (which has access to `IntuiTek`).
+    3.  **Configure SSH Client:** An SSH config file (`~/.ssh/config`) was created/updated to explicitly tell the SSH client to use the specific key (`[ssh_key_filename]`) when connecting to `github.com`:
         ```
         Host github.com
           HostName github.com
           User git
-          IdentityFile ~/.ssh/id_ed25519_intuitek
+          IdentityFile ~/.ssh/[ssh_key_filename]
           IdentitiesOnly yes
         ```
     4.  **Update Git Remote URL:** The crucial step was changing the repository's remote URL from HTTPS to SSH using:
@@ -61,13 +61,13 @@ A significant challenge involved authenticating Git operations (specifically `gi
     ```powershell
     Add-Content -Path "$env:USERPROFILE\.ssh\known_hosts" -Value "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" -Encoding ascii -ErrorAction SilentlyContinue
     ```
--   **Outcome:** Subsequent `git push -u origin main` command succeeded, authenticating correctly using the `id_ed25519_intuitek` SSH key associated with the `KyleMillion`/`kyle@intuitek.ai` identity.
+-   **Outcome:** Subsequent `git push -u origin main` command succeeded, authenticating correctly using the specified SSH key associated with the correct GitHub identity.
 
 ## 4. Current Status & Next Steps
 
 -   The local `paper/` directory contains the full project structure.
 -   This structure has been successfully pushed to the `main` branch of `https://github.com/IntuiTek/pelv-vcr-paper`.
--   Authentication via SSH using the dedicated key (`id_ed25519_intuitek`) is confirmed working.
+-   Authentication via SSH using the dedicated key (`[ssh_key_filename]`) is confirmed working.
 -   **Next steps for user:**
     1.  Fill in the content of `paper/draft/main.tex`.
     2.  Add BibTeX entries to `paper/references.bib` and corresponding `\cite{}` commands in `main.tex`.
