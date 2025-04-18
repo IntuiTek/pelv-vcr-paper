@@ -15,8 +15,26 @@ jobs:
           sudo apt-get update -qq 
           sudo apt-get install -y --no-install-recommends texlive-full ghostscript
       
-      - name: Compile PDF
+      # Optional: Clean intermediate files before build
+      - name: Clean Generated Files (Optional)
+        run: rm -f draft/*.aux draft/*.bbl draft/*.blg draft/*.log
+      
+      - name: Compile PDF (including BibTeX)
+        # latexmk handles multiple runs and bibtex automatically
         run: latexmk -pdf -output-directory=./draft draft/main.tex
+
+      # Optional: Check for undefined citations/references in the log
+      - name: Check for Missing Citations/References (Optional)
+        # Check log file generated in draft/ directory
+        run: |
+          if grep -E -q "Citation.*undefined|Reference.*undefined|No file.*\.bbl" draft/main.log; then
+            echo "Error: Undefined citations/references or missing .bbl file detected."
+            grep -E "Citation.*undefined|Reference.*undefined|No file.*\.bbl" draft/main.log
+            exit 1
+          else
+            echo "No undefined citations/references found."
+            exit 0
+          fi
 
       # Note: The compliance check needs the PDF in the root for pdffonts/gs
       # Copy the PDF temporarily to the root
